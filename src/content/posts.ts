@@ -1,8 +1,12 @@
 import { imageMedia, parsePostLink } from "../media/parse.ts";
 import type { MediaItem, MediaPost, PostIdentity } from "../media/types.ts";
+import { isPostAnalyticsPath, isPostMediaPath } from "../x/site.ts";
+import { X_DOM } from "./x-dom.ts";
 
-export const ARTICLE = 'article[data-testid="tweet"]';
-export const HOST = "[data-xmd-host]";
+/**
+ * XのDOMから保存対象を組み立てるアダプター．親子関係が変わった場合はこのファイルを修正する．
+ * ボタンの状態管理・Chromeへの保存要求はindex.tsに置き，X固有の要素判定を混在させない．
+ */
 
 export type PostTarget = {
   root: HTMLElement;
@@ -12,53 +16,43 @@ export type PostTarget = {
   tile?: boolean;
 };
 
+// 引用カードには標準アクションバーがない．投稿者表示を含む独立したカードとして判定する．
 function quoteRoots(article: HTMLElement): HTMLElement[] {
-  return [
-    ...article.querySelectorAll<HTMLElement>('div[role="link"], [data-testid="quoteTweet"]'),
-  ].filter(
+  return [...article.querySelectorAll<HTMLElement>(X_DOM.quote)].filter(
     (node) =>
-      node.closest(ARTICLE) === article &&
-      !!node.querySelector('[data-testid="User-Name"]') &&
-      !node.parentElement?.closest('div[role="link"], [data-testid="quoteTweet"]'),
+      node.closest(X_DOM.article) === article &&
+      !!node.querySelector(X_DOM.quoteAuthor) &&
+      !node.parentElement?.closest(X_DOM.quote),
   );
 }
 
 function identity(root: HTMLElement, excluded: HTMLElement[]): PostIdentity | undefined {
-  const links = [...root.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')].filter(
+  const links = [...root.querySelectorAll<HTMLAnchorElement>(X_DOM.postLink)].filter(
     (link) =>
-      link.closest(ARTICLE) === root.closest(ARTICLE) &&
+      link.closest(X_DOM.article) === root.closest(X_DOM.article) &&
       !excluded.some((quote) => quote.contains(link)),
   );
   const preferred =
-    links.find((link) => link.querySelector("time")) ??
-    links.find((link) => /\/analytics(?:\?|$)/.test(link.pathname)) ??
-    links.find((link) => /\/(photo|video)\/\d+/.test(link.pathname));
+    links.find((link) => link.querySelector(X_DOM.timestamp)) ??
+    links.find((link) => isPostAnalyticsPath(link.pathname)) ??
+    links.find((link) => isPostMediaPath(link.pathname));
   return preferred ? parsePostLink(preferred.href) : undefined;
 }
 
 function visibleMedia(root: HTMLElement, excluded: HTMLElement[]): MediaItem[] {
   const owns = (node: Element) =>
-    node.closest(ARTICLE) === root.closest(ARTICLE) &&
+    node.closest(X_DOM.article) === root.closest(X_DOM.article) &&
     !excluded.some((quote) => quote.contains(node)) &&
-    !node.closest('[data-testid="card.wrapper"], [hidden], [aria-hidden="true"]');
-  const warnings = root.querySelectorAll(
-    '[data-testid="sensitiveMediaInterstitial"], [data-testid="sensitiveMediaWarning"]',
-  );
+    !node.closest(X_DOM.excludedMedia);
+  const warnings = root.querySelectorAll(X_DOM.sensitiveWarning);
   if ([...warnings].some(owns)) return [];
   const media: MediaItem[] = [];
   const seen = new Set<string>();
-  for (const node of root.querySelectorAll<HTMLElement>(
-    '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]',
-  )) {
+  for (const node of root.querySelectorAll<HTMLElement>(X_DOM.media)) {
     if (!owns(node)) continue;
-    const parentMedia = node.parentElement?.closest(
-      '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]',
-    );
+    const parentMedia = node.parentElement?.closest(X_DOM.media);
     if (parentMedia && root.contains(parentMedia)) continue;
-    if (
-      node.matches('[data-testid="videoPlayer"]') ||
-      node.querySelector('video, [data-testid="videoPlayer"]')
-    ) {
+    if (node.matches(X_DOM.video) || node.querySelector(X_DOM.videoContent)) {
       media.push({
         kind: "video",
         url: null,
@@ -66,7 +60,7 @@ function visibleMedia(root: HTMLElement, excluded: HTMLElement[]): MediaItem[] {
         error: "動画の配信情報を取得できませんでした",
       });
     } else {
-      const image = node.querySelector<HTMLImageElement>('img[src*="pbs.twimg.com/media/"]');
+      const image = node.querySelector<HTMLImageElement>(X_DOM.image);
       const photo = image ? imageMedia(image.currentSrc || image.src) : undefined;
       if (photo?.url && !seen.has(photo.url)) {
         seen.add(photo.url);
@@ -90,11 +84,11 @@ export function articleTargets(article: HTMLElement, cache: Map<string, MediaPos
   const quotes = quoteRoots(article);
   const main = identity(article, quotes);
   const targets: PostTarget[] = [];
-  const bar = [...article.querySelectorAll<HTMLElement>('[role="group"]')].find(
+  const bar = [...article.querySelectorAll<HTMLElement>(X_DOM.actionBar)].find(
     (node) =>
-      node.closest(ARTICLE) === article &&
+      node.closest(X_DOM.article) === article &&
       !quotes.some((quote) => quote.contains(node)) &&
-      !!node.querySelector('[data-testid="reply"], [data-testid="like"], [data-testid="unlike"]'),
+      !!node.querySelector(X_DOM.postActions),
   );
   const media = visibleMedia(article, quotes);
   if (main && bar && media.length) {
@@ -125,15 +119,15 @@ export function articleTargets(article: HTMLElement, cache: Map<string, MediaPos
 /** プロフィールのメディアタブにはアクションバーがないため，タイル右下に配置する． */
 export function tileTargets(root: ParentNode, cache: Map<string, MediaPost>): PostTarget[] {
   const targets = new Map<HTMLElement, PostTarget>();
-  for (const link of root.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')) {
-    if (link.closest(ARTICLE) || !/\/(photo|video)\/\d+/.test(link.pathname)) continue;
+  for (const link of root.querySelectorAll<HTMLAnchorElement>(X_DOM.postLink)) {
+    if (link.closest(X_DOM.article) || !isPostMediaPath(link.pathname)) continue;
     const id = parsePostLink(link.href);
+    // 現行グリッドではリンクの直親がタイル．ラッパー階層の変更時は配置先をここで直す．
     const container = link.parentElement;
-    if (!id || !container || !link.querySelector('img, video, [data-testid="videoPlayer"]'))
-      continue;
+    if (!id || !container || !link.querySelector(X_DOM.tileMedia)) continue;
     const media = visibleMedia(link, []);
     if (!media.length) {
-      const image = link.querySelector<HTMLImageElement>('img[src*="pbs.twimg.com/media/"]');
+      const image = link.querySelector<HTMLImageElement>(X_DOM.image);
       const photo = image ? imageMedia(image.currentSrc || image.src) : undefined;
       if (photo) media.push(photo);
     }

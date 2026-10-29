@@ -1,14 +1,16 @@
+import { LIMITS } from "../config.ts";
 import { extractPosts } from "../media/parse.ts";
 import { BRIDGE_CHANNEL, type MediaPost } from "../media/types.ts";
+import { isXPostApiUrl as isPostResponse } from "../x/site.ts";
 
 // MAIN worldで実行する．認証情報や生のレスポンスを他のworldへ渡さない．
 const cache = new Map<string, MediaPost>();
 let ready = false;
 
 function publish(posts: MediaPost[]): void {
-  for (let i = 0; i < posts.length; i += 40) {
+  for (let i = 0; i < posts.length; i += LIMITS.bridgePosts) {
     window.postMessage(
-      { channel: BRIDGE_CHANNEL, type: "posts", posts: posts.slice(i, i + 40) },
+      { channel: BRIDGE_CHANNEL, type: "posts", posts: posts.slice(i, i + LIMITS.bridgePosts) },
       location.origin,
     );
   }
@@ -21,26 +23,13 @@ function capture(data: unknown): void {
       cache.delete(post.postId);
       cache.set(post.postId, post);
     }
-    while (cache.size > 400) {
+    while (cache.size > LIMITS.cachedPosts) {
       const first = cache.keys().next().value;
       if (first) cache.delete(first);
     }
     if (ready) publish(posts);
   } catch {
     // 解析の失敗をXの処理に伝播させない．
-  }
-}
-
-function isPostResponse(source: string): boolean {
-  try {
-    const url = new URL(source, location.origin);
-    return (
-      url.origin === "https://x.com" &&
-      url.pathname.startsWith("/i/api/graphql/") &&
-      !/dm|chat|message/i.test(url.pathname.split("/").pop() ?? "")
-    );
-  } catch {
-    return false;
   }
 }
 

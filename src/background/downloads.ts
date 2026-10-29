@@ -1,3 +1,4 @@
+import { LIMITS } from "../config.ts";
 import { mediaFilename } from "../media/parse.ts";
 import { DOWNLOAD_STATUS, type JobStatus, type MediaPost } from "../media/types.ts";
 
@@ -117,9 +118,9 @@ export class DownloadManager {
       const finished = (await this.allJobs())
         .filter((entry) => entry.state !== "processing")
         .sort((a, b) => b.createdAt - a.createdAt);
-      if (finished.length > 60) {
+      if (finished.length > LIMITS.finishedJobs) {
         await this.api.storage.session.remove(
-          finished.slice(60).map((entry) => PREFIX + entry.postId),
+          finished.slice(LIMITS.finishedJobs).map((entry) => PREFIX + entry.postId),
         );
       }
       return jobStatus(job);
@@ -144,7 +145,7 @@ export class DownloadManager {
         // download()の受理直後にSWが停止した場合は，既存要求を探す．再発行はしない．
         const candidates = await this.api.downloads.search({
           startedAfter: new Date(job.createdAt).toISOString(),
-          limit: 100,
+          limit: LIMITS.recoveryDownloads,
           orderBy: ["-startTime"],
         });
         const claimedIds = new Set(job.entries.map((item) => item.downloadId));

@@ -1,5 +1,8 @@
 import type { JobState } from "../media/types.ts";
 
+// 拡張機能自身が生成するDOM．X側のDOM変更には依存しない．
+export const BUTTON_HOST = "[data-xmd-host]";
+
 type ButtonState = "idle" | JobState;
 const PATHS: Record<ButtonState, string> = {
   idle: "M11 3h2v10.17l3.59-3.58L18 11l-6 6-6-6 1.41-1.41L11 13.17V3zM4 17h2v3h12v-3h2v5H4v-5z",

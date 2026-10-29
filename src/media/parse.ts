@@ -1,4 +1,10 @@
+import { LIMITS } from "../config.ts";
+import { X_IMAGE_HOST, X_IMAGE_PATH, X_ORIGIN, X_VIDEO_HOST } from "../x/site.ts";
 import type { MediaItem, MediaPost, PostIdentity } from "./types.ts";
+
+// 保存形式の許可リスト．ファイル名の検証と画像URLの解析で同じ定義を使う．
+const IMAGE_EXTENSIONS = ["jpg", "png", "webp", "gif", "avif"];
+const FILE_EXTENSIONS = [...IMAGE_EXTENSIONS, "mp4"];
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -7,19 +13,23 @@ export function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 export function isPostId(value: unknown): value is string {
+  // IDをNumberに変換すると桁落ちする．25桁は入力検証用の防御的な上限．
   return typeof value === "string" && /^\d{1,25}$/.test(value);
 }
 
 export function isUsername(value: unknown): value is string {
+  // Xのユーザー名形式．URL解析側でもこの検証を再利用する．
   return typeof value === "string" && /^[a-zA-Z0-9_]{1,15}$/.test(value);
 }
 
 export function parsePostLink(href: string): PostIdentity | undefined {
   try {
-    const url = new URL(href, "https://x.com");
-    if (url.origin !== "https://x.com") return;
-    const match = url.pathname.match(/^\/([a-zA-Z0-9_]{1,15})\/status\/(\d{1,25})(?:\/|$)/);
-    if (match) return { username: match[1], postId: match[2] };
+    const url = new URL(href, X_ORIGIN);
+    if (url.origin !== X_ORIGIN) return;
+    const match = url.pathname.match(/^\/([^/]+)\/status\/([^/]+)(?:\/|$)/);
+    if (match && isUsername(match[1]) && isPostId(match[2])) {
+      return { username: match[1], postId: match[2] };
+    }
   } catch {
     // XのDOM変更や不正なリンクは無視する．
   }
@@ -30,18 +40,18 @@ export function imageMedia(source: string): MediaItem | undefined {
     const url = new URL(source);
     if (
       url.protocol !== "https:" ||
-      url.hostname !== "pbs.twimg.com" ||
+      url.hostname !== X_IMAGE_HOST ||
       url.port ||
       url.username ||
       url.password ||
-      !url.pathname.startsWith("/media/")
+      !url.pathname.startsWith(X_IMAGE_PATH)
     )
       return;
     url.pathname = url.pathname.replace(/:(?:orig|large|medium|small|thumb|\d+x\d+)$/, "");
     const format = (url.searchParams.get("format") ?? url.pathname.match(/\.(\w+)$/)?.[1] ?? "jpg")
       .toLowerCase()
       .replace("jpeg", "jpg");
-    if (!["jpg", "png", "webp", "gif", "avif"].includes(format)) return;
+    if (!IMAGE_EXTENSIONS.includes(format)) return;
     url.searchParams.set("format", format);
     url.searchParams.set("name", "orig");
     url.hash = "";
@@ -52,12 +62,12 @@ export function imageMedia(source: string): MediaItem | undefined {
 }
 
 export function isMp4Url(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 4096) return false;
+  if (typeof value !== "string" || value.length > LIMITS.mediaUrlLength) return false;
   try {
     const url = new URL(value);
     return (
       url.protocol === "https:" &&
-      url.hostname === "video.twimg.com" &&
+      url.hostname === X_VIDEO_HOST &&
       !url.port &&
       !url.username &&
       !url.password &&
@@ -127,13 +137,17 @@ function parseEntity(value: unknown): MediaItem | undefined {
   }
 }
 
-/** 閲覧中のXが返したデータから，投稿ごとにメディアのみを取り出す． */
+/**
+ * XのGraphQL応答のスキーマ変更時の修正箇所．DOM変更への対応（content/posts.ts）とは独立して行う．
+ * 現在はlegacy.extended_entities.mediaとcore.user_resultsを解析し，旧形式にもフォールバックする．
+ * ここから返すMediaPostはXの生データを含めず，UIと保存処理はその形式だけに依存する．
+ */
 export function extractPosts(data: unknown): MediaPost[] {
   const posts = new Map<string, MediaPost>();
   const stack = [data];
   const visited = new WeakSet<object>();
   let count = 0;
-  while (stack.length && count++ < 50_000) {
+  while (stack.length && count++ < LIMITS.responseNodes) {
     const value = stack.pop();
     if (!value || typeof value !== "object" || visited.has(value)) continue;
     visited.add(value);
@@ -153,7 +167,7 @@ export function extractPosts(data: unknown): MediaPost[] {
       const media = (Array.isArray(entities?.media) ? entities.media : [])
         .map(parseEntity)
         .filter((item): item is MediaItem => !!item)
-        .slice(0, 16);
+        .slice(0, LIMITS.mediaPerPost);
       const quoteResult = asRecord(asRecord(node.quoted_status_result)?.result);
       const quotedPostId = legacy.quoted_status_id_str ?? quoteResult?.rest_id;
       posts.set(postId, {
@@ -176,7 +190,7 @@ export function validatePost(value: unknown): MediaPost | undefined {
     !isPostId(post.postId) ||
     !isUsername(post.username) ||
     !Array.isArray(post.media) ||
-    post.media.length > 16
+    post.media.length > LIMITS.mediaPerPost
   )
     return;
   const media: MediaItem[] = [];
@@ -212,7 +226,7 @@ export function mediaFilename(post: PostIdentity, item: MediaItem, index: number
     !isUsername(post.username) ||
     !Number.isInteger(index) ||
     index < 1 ||
-    !["jpg", "png", "webp", "gif", "avif", "mp4"].includes(item.ext)
+    !FILE_EXTENSIONS.includes(item.ext)
   ) {
     throw new Error("不正なファイル名です");
   }

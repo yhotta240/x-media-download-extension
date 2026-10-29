@@ -1,18 +1,17 @@
 import { asRecord, isPostId, validatePost } from "../media/parse.ts";
 import { type DownloadReply, GET_DOWNLOAD, START_DOWNLOAD } from "../media/types.ts";
+import { isSupportedXUrl } from "../x/site.ts";
 import { DownloadManager } from "./downloads.ts";
 
 const manager = new DownloadManager(chrome);
 
 function isXPage(sender: chrome.runtime.MessageSender): boolean {
   try {
-    const url = new URL(sender.url ?? "");
     return (
       sender.id === chrome.runtime.id &&
       sender.tab?.id !== undefined &&
       (sender.frameId ?? 0) === 0 &&
-      url.origin === "https://x.com" &&
-      !/^\/(messages|i\/(chat|broadcasts|spaces))(?:\/|$)/.test(url.pathname)
+      isSupportedXUrl(sender.url ?? "")
     );
   } catch {
     return false;
