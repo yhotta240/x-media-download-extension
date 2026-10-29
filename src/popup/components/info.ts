@@ -1,6 +1,7 @@
 import privacyPolicyDoc from "../../../docs/policies/privacy-policy.md";
 import { openLinkNewTab } from "../../utils/dom";
 import { escapeHtml } from "../../utils/html";
+import { extensionStoreUrl } from "../links.ts";
 import type { ManifestMetadata } from "../types";
 
 const PRIVACY_CLASS_MAP: Record<string, string> = {
@@ -25,7 +26,7 @@ export function setupInfoTab(
 ): void {
   const storeLink = document.getElementById("store-link") as HTMLAnchorElement;
   if (storeLink) {
-    storeLink.href = `https://chrome.google.com/webstore/detail/${chrome.runtime.id}`;
+    storeLink.href = extensionStoreUrl(chrome.runtime.id);
     openLinkNewTab(storeLink);
   }
 

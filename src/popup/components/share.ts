@@ -1,4 +1,9 @@
+import { extensionStoreUrl } from "../links.ts";
 import type { ShareConfig, SharePlatform } from "../types";
+
+// Popup固有の表示設定．ダウンロードボタンの待ち時間とは独立して調整する．
+const SHARE_WINDOW_FEATURES = "width=600,height=400";
+const COPY_FEEDBACK_MS = 2000;
 
 /**
  * 各プラットフォームのシェアURLを生成
@@ -35,7 +40,7 @@ async function executeShare(platform: SharePlatform, config: ShareConfig): Promi
 
   const shareUrl = getShareUrl(platform, config);
   if (shareUrl) {
-    window.open(shareUrl, "_blank", "width=600,height=400");
+    window.open(shareUrl, "_blank", SHARE_WINDOW_FEATURES);
     return true;
   }
   return false;
@@ -59,7 +64,7 @@ export function initShareMenu(onShare?: (platform: SharePlatform, success: boole
       // Chrome拡張機能のストアページURLを取得
       const extensionId = chrome.runtime.id;
       const manifest = chrome.runtime.getManifest();
-      const storeUrl = `https://chrome.google.com/webstore/detail/${extensionId}?utm_source=item-share-cb`;
+      const storeUrl = `${extensionStoreUrl(extensionId)}?utm_source=item-share-cb`;
 
       const config: ShareConfig = {
         title: manifest.name,
@@ -78,7 +83,7 @@ export function initShareMenu(onShare?: (platform: SharePlatform, success: boole
           setTimeout(() => {
             iconElement.classList.remove("bi-check2");
             iconElement.classList.add("bi-clipboard");
-          }, 2000);
+          }, COPY_FEEDBACK_MS);
         }
       }
 

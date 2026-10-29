@@ -1,15 +1,16 @@
 import type { Plugin } from "vite";
-import { WebSocketServer, type WebSocket } from "ws";
+import { WebSocketServer, WebSocket } from "ws";
+import { DEV_RELOAD_PORT } from "../../src/config.ts";
 
 /** ビルド完了後に WebSocket 経由で拡張機能へ "reload" を送信する Vite プラグイン */
-export function extensionReloaderPlugin(port = 6571): Plugin {
+export function extensionReloaderPlugin(port: number = DEV_RELOAD_PORT): Plugin {
   let wss: WebSocketServer | null = null;
   let watchMode = false;
 
   const sendReload = () => {
     for (const client of (wss?.clients ?? []) as Set<WebSocket>) {
       try {
-        if (client.readyState === 1) client.send("reload");
+        if (client.readyState === WebSocket.OPEN) client.send("reload");
       } catch {
         // 個々のクライアント送信エラーは無視する。
       }

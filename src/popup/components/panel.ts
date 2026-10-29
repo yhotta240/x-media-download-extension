@@ -1,5 +1,14 @@
 import type { LogEntry, LogLevel } from "../../utils/logger";
 
+// ログパネルの高さとスナップ判定はここで調整する（単位：px）．
+const PANEL_LAYOUT = {
+  defaultHeight: 150,
+  minVisibleHeight: 50,
+  maximizedTolerance: 20,
+  dragStartTolerance: 15,
+  headerSnapDistance: 20,
+} as const;
+
 const LEVEL_CLASS: Record<LogLevel, string> = {
   info: "text-body",
   warn: "text-warning",
@@ -30,7 +39,7 @@ export class PopupPanel {
   private startY: number = 0;
   private tmpPanelHeight: number = 0;
   private startHeightTop: number = 0;
-  private emdHeight: number = 150;
+  private emdHeight: number = PANEL_LAYOUT.defaultHeight;
   private isDragging: boolean = false;
 
   constructor() {
@@ -90,7 +99,7 @@ export class PopupPanel {
     }
 
     const panelHeight = parseFloat(this.panel.style.height || "0");
-    const isPanelVisible = panelHeight > 50 && isOpen;
+    const isPanelVisible = panelHeight > PANEL_LAYOUT.minVisibleHeight && isOpen;
 
     this.closeButton?.classList.toggle("d-none", !isPanelVisible);
     this.panelButton?.classList.toggle("d-none", isPanelVisible);
@@ -104,7 +113,7 @@ export class PopupPanel {
   private switchMinMaxButtons(): void {
     if (!this.panel) return;
     const panelHeight = parseFloat(this.panel.style.height || "0");
-    const isMaximized = panelHeight > this.getPanelHeight() - 20;
+    const isMaximized = panelHeight > this.getPanelHeight() - PANEL_LAYOUT.maximizedTolerance;
     this.maximizeButton?.classList.toggle("d-none", isMaximized);
     this.minimizeButton?.classList.toggle("d-none", !isMaximized);
   }
@@ -129,7 +138,9 @@ export class PopupPanel {
       this.switchMinMaxButtons();
       if (this.panel) {
         this.emdHeight =
-          this.panel.offsetHeight > this.getPanelHeight() - 20 ? 150 : this.panel.offsetHeight;
+          this.panel.offsetHeight > this.getPanelHeight() - PANEL_LAYOUT.maximizedTolerance
+            ? PANEL_LAYOUT.defaultHeight
+            : this.panel.offsetHeight;
       }
     });
 
@@ -143,15 +154,16 @@ export class PopupPanel {
       this.tmpPanelHeight =
         this.panel.offsetHeight === 0 ||
         this.panel.offsetHeight === this.getPanelHeight() ||
-        parseFloat(this.panel.style.height || "0") > this.getPanelHeight() - 15
-          ? 150
+        parseFloat(this.panel.style.height || "0") >
+          this.getPanelHeight() - PANEL_LAYOUT.dragStartTolerance
+          ? PANEL_LAYOUT.defaultHeight
           : this.panel.offsetHeight;
     });
 
     window.addEventListener("mousemove", (e: MouseEvent) => {
       if (!this.isDragging || !this.panel) return;
       document.body.style.userSelect = "none";
-      if ((this.header?.offsetHeight || 0) >= e.clientY - 20) {
+      if ((this.header?.offsetHeight || 0) >= e.clientY - PANEL_LAYOUT.headerSnapDistance) {
         this.panel.style.height = `${this.getPanelHeight()}px`;
         return;
       }
@@ -170,12 +182,12 @@ export class PopupPanel {
       if (this.resizer) this.resizer.style.backgroundColor = "";
       this.emdHeight = this.panel.offsetHeight;
       const panelHeights = this.panel.offsetHeight;
-      if (panelHeights < 50) {
-        this.emdHeight = 150;
+      if (panelHeights < PANEL_LAYOUT.minVisibleHeight) {
+        this.emdHeight = PANEL_LAYOUT.defaultHeight;
         this.togglePanel(false);
       }
-      if (panelHeights > this.getPanelHeight() - 20) {
-        this.emdHeight = 150;
+      if (panelHeights > this.getPanelHeight() - PANEL_LAYOUT.maximizedTolerance) {
+        this.emdHeight = PANEL_LAYOUT.defaultHeight;
         this.panel.style.height = `${this.getPanelHeight()}px`;
       }
       this.switchMinMaxButtons();
@@ -186,8 +198,9 @@ export class PopupPanel {
       this.tmpPanelHeight =
         this.panel.offsetHeight === 0 ||
         this.panel.offsetHeight === this.getPanelHeight() ||
-        parseFloat(this.panel.style.height || "0") > this.getPanelHeight() - 20
-          ? 150
+        parseFloat(this.panel.style.height || "0") >
+          this.getPanelHeight() - PANEL_LAYOUT.maximizedTolerance
+          ? PANEL_LAYOUT.defaultHeight
           : this.panel.offsetHeight;
       this.togglePanel(true);
       this.panel.style.height = `${this.getPanelHeight()}px`;

@@ -10,7 +10,6 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const isDev = mode === "development";
-  const reloaderPort = 6571;
   const bgEntry = isDev
     ? r("./src/background/dev.ts")
     : r("./src/background/index.ts");
@@ -75,7 +74,7 @@ export default defineConfig(({ mode }) => {
       contentScriptPlugin(isDev, fileURLToPath(new URL(".", import.meta.url))),
       popupScriptPlugin(isDev, fileURLToPath(new URL(".", import.meta.url))),
 
-      ...(isDev ? [extensionReloaderPlugin(reloaderPort)] : []),
+      ...(isDev ? [extensionReloaderPlugin()] : []),
     ],
   };
 });
