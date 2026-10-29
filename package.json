@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node --experimental-strip-types --test tests/*.test.ts",
+    "test:ui": "npm run build && node scripts/test-browser.mjs",
     "check": "biome check src",
     "check:fix": "biome check --write --unsafe src",
     "typecheck": "tsc --noEmit",

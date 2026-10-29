@@ -1,0 +1,40 @@
+.xmd-host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-inline-start: 4px;
+  color: rgb(113, 118, 123);
+}
+.xmd-host[data-quote="true"] { justify-content: flex-end; padding: 4px 8px; }
+.xmd-button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  cursor: pointer;
+  transition: color 120ms, background-color 120ms;
+}
+.xmd-button svg { width: 20px; height: 20px; fill: currentColor; }
+.xmd-button:hover, .xmd-button:focus-visible { color: rgb(29, 155, 240); background: rgb(29 155 240 / 10%); }
+.xmd-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.xmd-button:disabled { cursor: default; }
+.xmd-button[data-state="processing"] { color: rgb(29, 155, 240); }
+.xmd-button[data-state="processing"] svg { animation: xmd-spin 800ms linear infinite; }
+.xmd-button[data-state="success"] { color: rgb(0, 186, 124); }
+.xmd-button[data-state="error"] { color: rgb(244, 33, 46); }
+.xmd-tile { position: relative; }
+.xmd-tile > .xmd-host { position: absolute; inset-inline-end: 6px; bottom: 6px; z-index: 2; color: white; }
+.xmd-tile > .xmd-host .xmd-button { background: rgb(0 0 0 / 65%); }
+@keyframes xmd-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .xmd-button { transition: none; }
+  .xmd-button[data-state="processing"] svg { animation-duration: 2s; }
+}

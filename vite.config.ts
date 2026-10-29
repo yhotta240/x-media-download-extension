@@ -61,6 +61,7 @@ export default defineConfig(({ mode }) => {
       viteStaticCopy({
         targets: [
           { src: "public/popup.html", dest: ".", rename: { stripBase: 1 } },
+          { src: "public/content.css", dest: ".", rename: { stripBase: 1 } },
           { src: "public/manifest.meta.json", dest: ".", rename: { stripBase: 1 } },
           { src: "public/icons", dest: ".", rename: { stripBase: 1 } },
           {
