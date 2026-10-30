@@ -127,6 +127,12 @@ function attach(target: PostTarget): HTMLElement {
   }
   host.dataset.quote = String(target.quote);
   host.dataset.postId = target.post.postId;
+  if (target.iconSize) host.style.setProperty("--xmd-icon-size", target.iconSize);
+  else host.style.removeProperty("--xmd-icon-size");
+  if (target.hitPadding) host.style.setProperty("--xmd-hit-inline-padding", target.hitPadding);
+  else host.style.removeProperty("--xmd-hit-inline-padding");
+  if (target.marginStart) host.style.setProperty("--xmd-action-margin", target.marginStart);
+  else host.style.removeProperty("--xmd-action-margin");
   targets.set(host, target);
   if (target.tile) target.container.classList.add("xmd-tile");
   const button = host.querySelector("button");

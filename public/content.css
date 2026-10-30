@@ -1,40 +1,69 @@
 .xmd-host {
+  /* 標準アイコンの比率はposts.tsから設定する．引用・タイルや取得失敗時はこの値を使う． */
+  --xmd-icon-size: 1.25em;
+  --xmd-hit-padding: 8px;
+  --xmd-hit-inline-padding: var(--xmd-hit-padding);
+  --xmd-action-margin: 0px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  margin-inline-start: 4px;
+  flex: 0 0 auto;
+  margin: 0;
+  margin-inline-start: var(--xmd-action-margin);
+  padding: 0;
   color: rgb(113, 118, 123);
 }
-.xmd-host[data-quote="true"] { justify-content: flex-end; padding: 4px 8px; }
+.xmd-host[data-quote="true"] { justify-content: flex-end; padding: var(--xmd-hit-padding); }
 .xmd-button {
+  box-sizing: border-box;
   appearance: none;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: inherit;
+  font: inherit;
+  line-height: 1;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 7px;
+  width: var(--xmd-icon-size);
+  height: var(--xmd-icon-size);
+  padding: 0;
   cursor: pointer;
-  transition: color 120ms, background-color 120ms;
+  transition: color 120ms;
 }
-.xmd-button svg { width: 20px; height: 20px; fill: currentColor; }
-.xmd-button:hover, .xmd-button:focus-visible { color: rgb(29, 155, 240); background: rgb(29 155 240 / 10%); }
-.xmd-button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+/* クリック範囲は疑似要素で広げ，アクションバーのレイアウト上の高さを変えない． */
+.xmd-button::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--xmd-hit-padding));
+  border-radius: inherit;
+  pointer-events: none;
+  transition: background-color 120ms;
+}
+/* 背景円とクリック領域を分け，X標準の狭いgapでも隣のボタンへの操作を奪わない． */
+.xmd-button::after {
+  content: "";
+  position: absolute;
+  inset-block: calc(-1 * var(--xmd-hit-padding));
+  inset-inline: calc(-1 * var(--xmd-hit-inline-padding));
+}
+.xmd-button svg { position: relative; display: block; flex: none; width: 100%; height: 100%; fill: currentColor; }
+.xmd-button:hover, .xmd-button:focus-visible { color: rgb(29, 155, 240); }
+.xmd-button:hover::before, .xmd-button:focus-visible::before { background: rgb(29 155 240 / 10%); }
+.xmd-button:focus-visible { outline: none; }
+.xmd-button:focus-visible::before { outline: 2px solid currentColor; outline-offset: 2px; }
 .xmd-button:disabled { cursor: default; }
 .xmd-button[data-state="processing"] { color: rgb(29, 155, 240); }
 .xmd-button[data-state="processing"] svg { animation: xmd-spin 800ms linear infinite; }
 .xmd-button[data-state="success"] { color: rgb(0, 186, 124); }
 .xmd-button[data-state="error"] { color: rgb(244, 33, 46); }
 .xmd-tile { position: relative; }
-.xmd-tile > .xmd-host { position: absolute; inset-inline-end: 6px; bottom: 6px; z-index: 2; color: white; }
-.xmd-tile > .xmd-host .xmd-button { background: rgb(0 0 0 / 65%); }
+.xmd-tile > .xmd-host { position: absolute; inset-inline-end: 6px; bottom: 6px; z-index: 2; margin: 0; padding: var(--xmd-hit-padding); color: white; }
+.xmd-tile > .xmd-host .xmd-button::before { background: rgb(0 0 0 / 65%); }
 @keyframes xmd-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .xmd-button { transition: none; }
+  .xmd-button, .xmd-button::before { transition: none; }
   .xmd-button[data-state="processing"] svg { animation-duration: 2s; }
 }

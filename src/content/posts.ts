@@ -1,6 +1,7 @@
 import { imageMedia, parsePostLink } from "../media/parse.ts";
 import type { MediaItem, MediaPost, PostIdentity } from "../media/types.ts";
 import { isPostAnalyticsPath, isPostMediaPath } from "../x/site.ts";
+import { BUTTON_HOST } from "./button.ts";
 import { X_DOM } from "./x-dom.ts";
 
 /**
@@ -14,7 +15,46 @@ export type PostTarget = {
   post: MediaPost;
   quote: boolean;
   tile?: boolean;
+  iconSize?: string;
+  hitPadding?: string;
+  marginStart?: string;
 };
+
+/** Xのクラス名はコピーせず，標準ボタンの表示サイズ・配置方法だけを読み取る． */
+function actionButtonLayout(
+  bar: HTMLElement,
+): Pick<PostTarget, "iconSize" | "hitPadding" | "marginStart"> {
+  const layout: Pick<PostTarget, "iconSize" | "hitPadding" | "marginStart"> = {};
+  const style = getComputedStyle(bar);
+  const icon = bar.querySelector(X_DOM.postActions)?.querySelector("svg");
+  let iconWidth = 0;
+  if (icon) {
+    const width = Number.parseFloat(getComputedStyle(icon).width);
+    const fontSize = Number.parseFloat(style.fontSize);
+    if (Number.isFinite(width) && width > 0 && Number.isFinite(fontSize) && fontSize > 0) {
+      iconWidth = width;
+      // em比率にしておくことで，Xの文字サイズ設定の変更にも追従する．
+      layout.iconSize = `${width / fontSize}em`;
+    }
+  }
+  const nativeItems = [...bar.children].filter((item) => !item.matches(BUTTON_HOST));
+  const beforeLast = nativeItems[nativeItems.length - 2];
+  const last = nativeItems[nativeItems.length - 1];
+  const previousStyle = beforeLast ? getComputedStyle(beforeLast) : undefined;
+  const lastStyle = last ? getComputedStyle(last) : undefined;
+  const pixels = (value: string | undefined) => Number.parseFloat(value ?? "") || 0;
+  // 一覧ではブックマークの末尾marginも共有との間隔に含まれる．追加UI側に同じ間隔を再現する．
+  const nativeMargin =
+    pixels(previousStyle?.marginInlineEnd) + pixels(lastStyle?.marginInlineStart);
+  // 詳細でも伸縮させず共有の直後に置く．クリック領域は隣の共有ボタンを覆わないよう制限する．
+  const gap = Number.parseFloat(style.columnGap);
+  const standardGap = Number.isFinite(gap) ? gap : 0;
+  // 共有との間は最低でもアイコン幅の半分を空ける．一覧の標準間隔が広ければその値を維持する．
+  const spacing = Math.max(standardGap + nativeMargin, iconWidth / 2);
+  layout.marginStart = `${spacing - standardGap - pixels(lastStyle?.marginInlineEnd)}px`;
+  layout.hitPadding = `${Math.max(0, spacing / 2)}px`;
+  return layout;
+}
 
 // 引用カードには標準アクションバーがない．投稿者表示を含む独立したカードとして判定する．
 function quoteRoots(article: HTMLElement): HTMLElement[] {
@@ -97,6 +137,7 @@ export function articleTargets(article: HTMLElement, cache: Map<string, MediaPos
       container: bar,
       post: buildPost(main, media, cache),
       quote: false,
+      ...actionButtonLayout(bar),
     });
   }
   for (const quote of quotes) {
