@@ -1,11 +1,12 @@
 {
-  "name": "chrome-extension-starter-kit",
-  "version": "0.3.2",
-  "description": "",
-  "main": "index.js",
+  "name": "x-media-download-extension",
+  "version": "0.0.1",
+  "description": "Xのポストに含まれる画像・動画をワンクリックで保存するChrome拡張機能",
+  "private": true,
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run build && node --experimental-strip-types --test tests/*.test.ts",
+    "test:ui": "npm run build && node scripts/test-browser.mjs",
     "check": "biome check src",
     "check:fix": "biome check --write --unsafe src",
     "typecheck": "tsc --noEmit",
@@ -15,7 +16,15 @@
     "pack": "npm run build && exr pack dist/",
     "release": "npm run build && exr release dist/ --force"
   },
-  "keywords": [],
+  "keywords": ["chrome-extension", "x", "media", "download"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yhotta240/x-media-download-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yhotta240/x-media-download-extension/issues"
+  },
+  "homepage": "https://github.com/yhotta240/x-media-download-extension#readme",
   "author": "yhotta240",
   "license": "MIT",
   "engines": {

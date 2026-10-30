@@ -7,7 +7,7 @@ export async function getSettings(): Promise<Settings> {
 
 export async function isEnabled(): Promise<boolean> {
   const data = await getStorage<{ enabled?: boolean }>("enabled");
-  return data.enabled === true;
+  return data.enabled !== false;
 }
 
 export async function setSettings(settings: Settings): Promise<void> {

@@ -4,11 +4,12 @@ import { resolve } from "node:path";
 import { addProjectWatchFiles } from "../watch-files.ts";
 
 /**
- * Content script を IIFE 形式で単独バンドルするプラグイン．
+ * Content scriptとMAIN worldの取得スクリプトを別々のIIFEにバンドルする．
  * Chrome の content scripts は ES module が使えないため，すべての依存を内包する必要がある．
  */
 export function contentScriptPlugin(isDev: boolean, root: string): Plugin {
   const contentEntry = resolve(root, "src/content/index.ts");
+  const pageEntry = resolve(root, "src/page/index.ts");
   let building = false;
 
   return {
@@ -26,27 +27,32 @@ export function contentScriptPlugin(isDev: boolean, root: string): Plugin {
         if (building) return;
         building = true;
         try {
-          await build({
-            configFile: false,
-            logLevel: "info",
-            publicDir: false,
-            define: {
-              "process.env.NODE_ENV": JSON.stringify(isDev ? "development" : "production"),
-            },
-            resolve: {
-              alias: { src: resolve(root, "src") },
-            },
-            build: {
-              outDir: resolve(root, "dist"),
-              emptyOutDir: false,
-              sourcemap: isDev ? "inline" : false,
-              minify: isDev ? false : undefined,
-              rollupOptions: {
-                input: contentEntry,
-                output: { format: "iife", entryFileNames: "content.js" },
+          for (const [name, entry] of [
+            ["content", contentEntry],
+            ["page", pageEntry],
+          ]) {
+            await build({
+              configFile: false,
+              logLevel: "info",
+              publicDir: false,
+              define: {
+                "process.env.NODE_ENV": JSON.stringify(isDev ? "development" : "production"),
               },
-            },
-          });
+              resolve: {
+                alias: { src: resolve(root, "src") },
+              },
+              build: {
+                outDir: resolve(root, "dist"),
+                emptyOutDir: false,
+                sourcemap: isDev ? "inline" : false,
+                minify: isDev ? false : undefined,
+                rollupOptions: {
+                  input: entry,
+                  output: { format: "iife", entryFileNames: `${name}.js` },
+                },
+              },
+            });
+          }
         } finally {
           building = false;
         }

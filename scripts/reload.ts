@@ -1,5 +1,6 @@
-const DEV_SERVER_PORT = 6571;
-const DEV_SERVER_URL = `ws://localhost:${DEV_SERVER_PORT}`;
+import { DEV_RELOAD_PORT } from "../src/config.ts";
+
+const DEV_SERVER_URL = `ws://localhost:${DEV_RELOAD_PORT}`;
 
 /**
  * 開発用オートリロード機能を初期化

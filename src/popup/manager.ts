@@ -61,7 +61,10 @@ export class PopupManager {
     try {
       this.settings = await getSettings();
       this.enabled = await isEnabled();
-      if (this.enabledElement) this.enabledElement.checked = this.enabled;
+      if (this.enabledElement) {
+        this.enabledElement.checked = this.enabled;
+        this.enabledElement.setAttribute("aria-checked", String(this.enabled));
+      }
       await this.showLog(
         `${this.manifestData.short_name} は現在 ${this.enabled ? "有効" : "無効"} です`,
       );
@@ -84,6 +87,7 @@ export class PopupManager {
   private addEventListeners(): void {
     this.enabledElement?.addEventListener("change", async (event) => {
       this.enabled = (event.target as HTMLInputElement).checked;
+      this.enabledElement?.setAttribute("aria-checked", String(this.enabled));
       try {
         await setEnabled(this.enabled);
         await this.showLog(

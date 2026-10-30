@@ -1,9 +1,10 @@
 import ".";
 import { reloadExtension } from "../../scripts/reload";
 import { reloadTargetTabs } from "../utils/reload-tabs";
+import { X_MATCH_PATTERN } from "../x/site.ts";
 
 // 開発用のターゲットURLパターン
-const targetUrls = ["https://www.google.com/*"];
+const targetUrls = [X_MATCH_PATTERN];
 
 if (process.env.NODE_ENV === "development") {
   console.log("開発環境：", process.env.NODE_ENV);

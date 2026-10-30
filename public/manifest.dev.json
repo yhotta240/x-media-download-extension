@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Chrome Extension Starter Kit",
-  "short_name": "Chrome Extension Starter Kit",
-  "version": "0.3.0",
-  "description": "",
+  "minimum_chrome_version": "111",
+  "name": "X Media Download",
+  "short_name": "X Media Download",
+  "version": "0.0.1",
+  "description": "Xのポストに含まれる画像・動画をワンクリックで保存するChrome拡張機能",
   "icons": {
-    "48": "icons/icon.png"
+    "128": "icons/icon.png"
   },
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "downloads", "tabs"],
   "action": {
     "default_popup": "popup.html"
   },
@@ -17,8 +18,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*/*", "http://*/*"],
-      "js": ["content.js"]
+      "matches": ["https://x.com/*"],
+      "js": ["page.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://x.com/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
     }
   ]
 }
