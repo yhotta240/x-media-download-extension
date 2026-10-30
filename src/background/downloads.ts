@@ -20,13 +20,11 @@ type DownloadJob = {
 };
 const PREFIX = "xmd:job:";
 
-export function jobStatus(job: DownloadJob): JobStatus {
+function jobStatus(job: DownloadJob): JobStatus {
   return {
     postId: job.postId,
     jobId: job.jobId,
     state: job.state,
-    completed: job.entries.filter((entry) => entry.state === "complete").length,
-    total: job.entries.length,
     ...(job.state === "error"
       ? {
           error: job.entries.find((entry) => entry.error)?.error ?? "ダウンロードに失敗しました",

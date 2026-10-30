@@ -10,7 +10,6 @@ import { X_DOM } from "./x-dom.ts";
  */
 
 export type PostTarget = {
-  root: HTMLElement;
   container: HTMLElement;
   post: MediaPost;
   quote: boolean;
@@ -133,7 +132,6 @@ export function articleTargets(article: HTMLElement, cache: Map<string, MediaPos
   const media = visibleMedia(article, quotes);
   if (main && bar && media.length) {
     targets.push({
-      root: article,
       container: bar,
       post: buildPost(main, media, cache),
       quote: false,
@@ -147,7 +145,6 @@ export function articleTargets(article: HTMLElement, cache: Map<string, MediaPos
     const id = known ?? identity(quote, []);
     if (id && visible.length) {
       targets.push({
-        root: quote,
         container: quote,
         post: buildPost(id, visible, cache),
         quote: true,
@@ -176,7 +173,7 @@ export function tileTargets(root: ParentNode, cache: Map<string, MediaPost>): Po
     const known = cache.get(id.postId);
     // グリッドには一部の画像しかない場合があるため，全件データを確認できた場合だけ表示する．
     if (!known?.media.length) continue;
-    targets.set(container, { root: container, container, post: known, quote: false, tile: true });
+    targets.set(container, { container, post: known, quote: false, tile: true });
   }
   return [...targets.values()];
 }

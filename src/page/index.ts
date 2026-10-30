@@ -4,7 +4,8 @@ import { BRIDGE_CHANNEL, type MediaPost } from "../media/types.ts";
 import { isXPostApiUrl as isPostResponse } from "../x/site.ts";
 
 // MAIN worldで実行する．認証情報や生のレスポンスを他のworldへ渡さない．
-const cache = new Map<string, MediaPost>();
+// Content Scriptの準備が済むまでだけ保持する．以後のキャッシュは受信側に任せる．
+const pending = new Map<string, MediaPost>();
 let ready = false;
 
 function publish(posts: MediaPost[]): void {
@@ -17,25 +18,24 @@ function publish(posts: MediaPost[]): void {
 }
 
 function capture(data: unknown): void {
-  try {
-    const posts = extractPosts(data);
-    for (const post of posts) {
-      cache.delete(post.postId);
-      cache.set(post.postId, post);
-    }
-    while (cache.size > LIMITS.cachedPosts) {
-      const first = cache.keys().next().value;
-      if (first) cache.delete(first);
-    }
-    if (ready) publish(posts);
-  } catch {
-    // 解析の失敗をXの処理に伝播させない．
+  const posts = extractPosts(data);
+  if (ready) {
+    publish(posts);
+    return;
+  }
+  for (const post of posts) {
+    pending.delete(post.postId);
+    pending.set(post.postId, post);
+  }
+  while (pending.size > LIMITS.cachedPosts) {
+    const first = pending.keys().next().value;
+    if (first) pending.delete(first);
   }
 }
 
 async function captureResponse(response: Response): Promise<void> {
   try {
-    if (response.ok && isPostResponse(response.url)) capture(await response.json());
+    if (response.ok && isPostResponse(response.url)) capture(await response.clone().json());
   } catch {
     /* Xの表示には影響させない． */
   }
@@ -44,11 +44,7 @@ async function captureResponse(response: Response): Promise<void> {
 const originalFetch = window.fetch;
 window.fetch = async function (this: Window, ...args: Parameters<typeof fetch>): Promise<Response> {
   const response = await originalFetch.apply(this, args);
-  try {
-    if (isPostResponse(response.url)) void captureResponse(response.clone());
-  } catch {
-    /* 本来のレスポンスを必ず返す． */
-  }
+  void captureResponse(response);
   return response;
 };
 
@@ -83,5 +79,6 @@ window.addEventListener("message", (event: MessageEvent) => {
   )
     return;
   ready = true;
-  publish([...cache.values()]);
+  publish([...pending.values()]);
+  pending.clear();
 });

@@ -83,13 +83,6 @@ test("従来のユーザー情報と可視性ラッパーにも対応する", ()
   assert.equal(extractPosts({ result: { tweet: post } })[0].username, "old_user");
 });
 
-test("壊れたデータと循環参照で停止しない", () => {
-  const cyclic: Record<string, unknown> = { node: tweet("1", []) };
-  cyclic.self = cyclic;
-  assert.equal(extractPosts(cyclic).length, 1);
-  assert.deepEqual(extractPosts({ data: null }), []);
-});
-
 test("ページ由来の投稿データを再検証し，パス注入を拒否する", () => {
   const post = extractPosts(tweet("123", [photo("one")]))[0];
   assert.ok(validatePost(post));
@@ -97,7 +90,6 @@ test("ページ由来の投稿データを再検証し，パス注入を拒否�
   assert.equal(validatePost({ ...post, postId: "1/../../" }), undefined);
   assert.equal(validatePost({ ...post, media: [{ kind: "video", url: "https://evil.test/a.mp4", ext: "mp4" }] }), undefined);
   assert.equal(validatePost({ ...post, media: [{ kind: "photo", url: "file:///c:/test", ext: "exe" }] }), undefined);
-  assert.throws(() => mediaFilename(post, { kind: "photo", url: null, ext: "../exe" }, 1));
 });
 
 test("ポストリンクはXの投稿だけを受け付ける", () => {

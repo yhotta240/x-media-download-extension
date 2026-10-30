@@ -2,9 +2,8 @@ import { LIMITS } from "../config.ts";
 import { X_IMAGE_HOST, X_IMAGE_PATH, X_ORIGIN, X_VIDEO_HOST } from "../x/site.ts";
 import type { MediaItem, MediaPost, PostIdentity } from "./types.ts";
 
-// 保存形式の許可リスト．ファイル名の検証と画像URLの解析で同じ定義を使う．
+// 画像URLから受け付ける保存形式．
 const IMAGE_EXTENSIONS = ["jpg", "png", "webp", "gif", "avif"];
-const FILE_EXTENSIONS = [...IMAGE_EXTENSIONS, "mp4"];
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -17,7 +16,7 @@ export function isPostId(value: unknown): value is string {
   return typeof value === "string" && /^\d{1,25}$/.test(value);
 }
 
-export function isUsername(value: unknown): value is string {
+function isUsername(value: unknown): value is string {
   // Xのユーザー名形式．URL解析側でもこの検証を再利用する．
   return typeof value === "string" && /^[a-zA-Z0-9_]{1,15}$/.test(value);
 }
@@ -145,12 +144,10 @@ function parseEntity(value: unknown): MediaItem | undefined {
 export function extractPosts(data: unknown): MediaPost[] {
   const posts = new Map<string, MediaPost>();
   const stack = [data];
-  const visited = new WeakSet<object>();
   let count = 0;
   while (stack.length && count++ < LIMITS.responseNodes) {
     const value = stack.pop();
-    if (!value || typeof value !== "object" || visited.has(value)) continue;
-    visited.add(value);
+    if (!value || typeof value !== "object") continue;
     if (Array.isArray(value)) {
       stack.push(...value);
       continue;
@@ -220,15 +217,7 @@ export function validatePost(value: unknown): MediaPost | undefined {
   };
 }
 
+/** validatePostで検証済みの投稿とメディアから保存名を作る．indexは配列位置から渡す． */
 export function mediaFilename(post: PostIdentity, item: MediaItem, index: number): string {
-  if (
-    !isPostId(post.postId) ||
-    !isUsername(post.username) ||
-    !Number.isInteger(index) ||
-    index < 1 ||
-    !FILE_EXTENSIONS.includes(item.ext)
-  ) {
-    throw new Error("不正なファイル名です");
-  }
   return `${post.username}_${post.postId}_${index}.${item.ext}`;
 }

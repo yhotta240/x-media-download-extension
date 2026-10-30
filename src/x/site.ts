@@ -1,6 +1,6 @@
 /**
  * XのURL・配信元・対象画面のルール．ドメインやルーティングの変更はここで対応する．
- * Chromeの宣言用Manifestにも同じ値が必要なため，一致はtests/config.test.tsで検査する．
+ * 対象画面を変更するときは，public/manifest.*.jsonの宣言も合わせて更新する．
  * CDNホスト名の完全一致は安全性の制約でもある．安易に任意ホストを許可しないこと．
  */
 export const X_ORIGIN = "https://x.com";
@@ -8,8 +8,7 @@ export const X_MATCH_PATTERN = `${X_ORIGIN}/*`;
 export const X_IMAGE_HOST = "pbs.twimg.com";
 export const X_VIDEO_HOST = "video.twimg.com";
 export const X_IMAGE_PATH = "/media/";
-export const X_EXCLUDED_PATHS = ["/messages", "/i/chat", "/i/broadcasts", "/i/spaces"] as const;
-export const X_EXCLUDE_MATCHES = X_EXCLUDED_PATHS.map((path) => `${X_ORIGIN}${path}*`);
+const X_EXCLUDED_PATHS = ["/messages", "/i/chat", "/i/broadcasts", "/i/spaces"] as const;
 
 export function isSupportedXPage(pathname: string): boolean {
   return !X_EXCLUDED_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

@@ -87,8 +87,6 @@ async function download(host: HTMLElement): Promise<void> {
     postId: post.postId,
     jobId: "pending",
     state: "processing",
-    completed: 0,
-    total: post.media.length,
   };
   activeJobs.set(post.postId, starting);
   updateButtons(post.postId);

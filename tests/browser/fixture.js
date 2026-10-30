@@ -51,11 +51,11 @@ Object.defineProperty(window, "chrome", { configurable: true, value: {
     async sendMessage(message) {
       if (message.type === "xmd:status") return { ok: true, status: jobs.get(message.postId) };
       calls.push(message.post);
-      const status = { postId: message.post.postId, jobId: crypto.randomUUID(), state: "processing", completed: 0, total: message.post.media.length };
+      const status = { postId: message.post.postId, jobId: crypto.randomUUID(), state: "processing" };
       jobs.set(status.postId, status);
       setTimeout(() => {
         const error = message.post.media.some((item) => !item.url);
-        const finished = { ...status, state: error ? "error" : "success", completed: error ? 0 : status.total };
+        const finished = { ...status, state: error ? "error" : "success" };
         jobs.set(status.postId, finished);
         for (const listener of listeners) listener({ type: "xmd:update", status: finished });
       }, 100);

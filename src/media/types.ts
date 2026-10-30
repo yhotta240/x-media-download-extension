@@ -18,8 +18,6 @@ export type JobStatus = {
   postId: string;
   jobId: string;
   state: JobState;
-  completed: number;
-  total: number;
   error?: string;
 };
 
