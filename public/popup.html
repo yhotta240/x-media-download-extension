@@ -113,7 +113,15 @@
       aria-labelledby="settings-tab">
       <h5 class="">設定</h5>
       <p class="small">上のスイッチで，Xのポストに表示するダウンロードボタンを切り替えます．</p>
-      <p class="text-muted small">画像・動画は取得可能な最高画質で個別に保存します．HLSのみの動画・ライブ配信は非対応です．</p>
+      <p class="text-muted small">画像・動画は取得可能な最高画質で保存します．HLSのみの動画・ライブ配信は非対応です．</p>
+      <div class="mb-3">
+        <label for="multiple-media-mode" class="form-label">複数メディアの保存方法</label>
+        <select class="form-select" id="multiple-media-mode" aria-describedby="multiple-media-help" disabled>
+          <option value="individual">個別に保存</option>
+          <option value="zip">ZIPで保存</option>
+        </select>
+        <p class="form-text" id="multiple-media-help">メディアが1件の場合は，どちらの設定でも直接保存します．</p>
+      </div>
 
       <!-- =========================
         設定項目のテンプレート

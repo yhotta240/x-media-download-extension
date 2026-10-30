@@ -47,6 +47,7 @@
     "ws": "^8.18.3"
   },
   "dependencies": {
-    "bootstrap": "^5.3.8"
+    "bootstrap": "^5.3.8",
+    "fflate": "0.8.3"
   }
 }

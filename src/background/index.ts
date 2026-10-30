@@ -1,3 +1,4 @@
+import { ARCHIVE_CHANGED, ARCHIVE_PAGE } from "../archive/types.ts";
 import { asRecord, isPostId, validatePost } from "../media/parse.ts";
 import { type DownloadReply, GET_DOWNLOAD, START_DOWNLOAD } from "../media/types.ts";
 import { isSupportedXUrl } from "../x/site.ts";
@@ -20,6 +21,24 @@ function isXPage(sender: chrome.runtime.MessageSender): boolean {
 
 chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
   const request = asRecord(message);
+  if (
+    request?.type === ARCHIVE_CHANGED &&
+    sender.id === chrome.runtime.id &&
+    sender.url === chrome.runtime.getURL(ARCHIVE_PAGE) &&
+    !sender.tab &&
+    typeof request.jobId === "string"
+  ) {
+    void (async () => {
+      try {
+        await manager.archiveChanged(request.jobId as string);
+        sendResponse({ ok: true });
+      } catch (error) {
+        console.warn("ZIPの保存状態を更新できませんでした", error);
+        sendResponse({ ok: false });
+      }
+    })();
+    return true;
+  }
   if (!request || ![START_DOWNLOAD, GET_DOWNLOAD].includes(String(request.type))) return;
   if (!isXPage(sender)) {
     sendResponse({ ok: false, error: "対象外のページです" });

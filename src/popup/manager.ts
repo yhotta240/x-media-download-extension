@@ -1,5 +1,5 @@
 import meta from "../../public/manifest.meta.json";
-import { DEFAULT_SETTINGS, type Settings } from "../settings";
+import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from "../settings";
 import {
   addLog,
   clearLogs,
@@ -25,6 +25,7 @@ export class PopupManager {
   private manifestData: chrome.runtime.Manifest;
   private manifestMetadata: ManifestMetadata;
   private enabledElement: HTMLInputElement | null;
+  private mediaModeElement: HTMLSelectElement | null;
   // private notificationToggle: HTMLInputElement | null;
   // private fontSizeRange: HTMLInputElement | null;
 
@@ -33,6 +34,9 @@ export class PopupManager {
     this.manifestData = chrome.runtime.getManifest();
     this.manifestMetadata = meta || {};
     this.enabledElement = document.getElementById("enabled") as HTMLInputElement | null;
+    this.mediaModeElement = document.getElementById(
+      "multiple-media-mode",
+    ) as HTMLSelectElement | null;
     // this.notificationToggle = document.getElementById('notification-toggle') as HTMLInputElement | null;
     // this.fontSizeRange = document.getElementById('font-size') as HTMLInputElement | null;
 
@@ -60,6 +64,10 @@ export class PopupManager {
 
     try {
       this.settings = await getSettings();
+      if (this.mediaModeElement) {
+        this.mediaModeElement.value = this.settings.multipleMediaMode;
+        this.mediaModeElement.disabled = false;
+      }
       this.enabled = await isEnabled();
       if (this.enabledElement) {
         this.enabledElement.checked = this.enabled;
@@ -85,6 +93,16 @@ export class PopupManager {
   }
 
   private addEventListeners(): void {
+    this.mediaModeElement?.addEventListener("change", async () => {
+      const select = this.mediaModeElement;
+      if (!select) return;
+      select.disabled = true;
+      await this.updateSettings({
+        multipleMediaMode: normalizeSettings({ multipleMediaMode: select.value }).multipleMediaMode,
+      });
+      select.value = this.settings.multipleMediaMode;
+      select.disabled = false;
+    });
     this.enabledElement?.addEventListener("change", async (event) => {
       this.enabled = (event.target as HTMLInputElement).checked;
       this.enabledElement?.setAttribute("aria-checked", String(this.enabled));
@@ -144,15 +162,15 @@ export class PopupManager {
     // });
   }
 
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: 設定を更新する際はこの関数を呼び出してください
   private async updateSettings(
     patch: Partial<Settings>,
     successMessage?: string,
     failedMessage?: string,
   ): Promise<void> {
     try {
-      this.settings = { ...this.settings, ...patch };
-      await setSettings(this.settings);
+      const settings = { ...this.settings, ...patch };
+      await setSettings(settings);
+      this.settings = settings;
       if (successMessage) await this.showLog(successMessage);
     } catch (err) {
       console.error("failed to save settings", err);
