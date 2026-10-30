@@ -1,6 +1,6 @@
 {
   "name": "x-media-download-extension",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Xのポストに含まれる画像・動画をワンクリックで保存するChrome拡張機能",
   "private": true,
   "type": "module",

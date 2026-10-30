@@ -3,7 +3,7 @@
   "minimum_chrome_version": "111",
   "name": "X Media Download",
   "short_name": "X Media Download",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Xのポストに含まれる画像・動画をワンクリックで保存するChrome拡張機能",
   "icons": {
     "128": "icons/icon.png"
