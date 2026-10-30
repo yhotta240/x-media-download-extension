@@ -53,6 +53,24 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
   return true;
 });
 
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+  if (item.byExtensionId !== chrome.runtime.id) {
+    suggest();
+    return;
+  }
+  void (async () => {
+    let filename: string | undefined;
+    try {
+      filename = await manager.filenameFor(item);
+    } catch (error) {
+      console.warn("保存名の取得に失敗しました", error);
+    }
+    // 対象外・取得失敗でも必ず応答して，Chromeの保存処理を止めない．
+    suggest(filename ? { filename, conflictAction: "uniquify" } : undefined);
+  })();
+  return true;
+});
+
 chrome.downloads.onChanged.addListener((delta) => {
   if (delta.state?.current || delta.error?.current) {
     void manager

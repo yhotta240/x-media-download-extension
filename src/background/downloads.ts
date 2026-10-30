@@ -70,6 +70,23 @@ export class DownloadManager {
       .map(([, value]) => value as DownloadJob);
   }
 
+  /** 他の拡張機能が保存名を決定する環境でも，本拡張機能の要求には指定名を提案する． */
+  async filenameFor(
+    item: Pick<chrome.downloads.DownloadItem, "id" | "url" | "byExtensionId">,
+  ): Promise<string | undefined> {
+    if (item.byExtensionId !== this.api.runtime.id) return;
+    // download()の完了待ちと競合させないため，排他キューには入れず保存済みジョブを読む．
+    const entries = (await this.allJobs()).flatMap((job) => job.entries);
+    const assigned = entries.find((entry) => entry.downloadId === item.id);
+    if (assigned) return assigned.filename;
+    // downloadIdの保存より先にイベントが届く場合だけ，開始中のURLと照合する．
+    const pending = entries.filter(
+      (entry) =>
+        entry.state === "starting" && entry.downloadId === undefined && entry.url === item.url,
+    );
+    return pending.length === 1 ? pending[0].filename : undefined;
+  }
+
   private async save(job: DownloadJob): Promise<void> {
     await this.api.storage.session.set({ [PREFIX + job.postId]: job });
     for (const client of job.clients) {

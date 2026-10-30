@@ -73,6 +73,47 @@ test("同時クリック・別タブからの要求でも多重実行しない",
   assert.equal(mock.requests.length, 2);
 });
 
+test("Chromeの保存名決定時に画像・動画の指定名を復元し，他の保存には干渉しない", async () => {
+  const mock = mockChrome();
+  const manager = new DownloadManager(mock.api);
+  await manager.accept(post, { tabId: 1 });
+  await manager.status(post.postId);
+  const restarted = new DownloadManager(mock.api);
+  for (const [index, media] of post.media.entries()) {
+    const item = { id: index + 1, url: media.url!, byExtensionId: "test-extension" };
+    assert.equal(await restarted.filenameFor(item), `example_123_${index + 1}.${media.ext}`);
+    assert.equal(await restarted.filenameFor({ ...item, byExtensionId: "other-extension" }), undefined);
+    assert.equal(await restarted.filenameFor({ ...item, byExtensionId: undefined }), undefined);
+  }
+  assert.equal(await restarted.filenameFor({ id: 90, url: post.media[0].url!,
+    byExtensionId: "test-extension" }), undefined);
+});
+
+test("downloadId保存前の保存名決定でも停止せず，曖昧なURL一致は採用しない", async () => {
+  const mock = mockChrome();
+  const manager = new DownloadManager(mock.api);
+  const download = mock.api.downloads.download;
+  const names: (string | undefined)[] = [];
+  mock.api.downloads.download = (async (options: chrome.downloads.DownloadOptions) => {
+    // Chromeがdownload()を解決する前に保存名を問い合わせる順序も再現する．
+    names.push(await manager.filenameFor({ id: mock.requests.length + 1,
+      url: options.url, byExtensionId: "test-extension" }));
+    return download(options);
+  }) as typeof mock.api.downloads.download;
+  await manager.accept(post, { tabId: 1 });
+  await manager.status(post.postId);
+  assert.deepEqual(names, ["example_123_1.jpg", "example_123_2.mp4"]);
+
+  const job = mock.session["xmd:job:123"] as { entries: {
+    state: string; downloadId?: number; url: string; filename: string;
+  }[] };
+  job.entries[0].state = "starting";
+  delete job.entries[0].downloadId;
+  job.entries.push({ ...job.entries[0], filename: "other_123_3.jpg" });
+  assert.equal(await manager.filenameFor({ id: 90, url: post.media[0].url!,
+    byExtensionId: "test-extension" }), undefined);
+});
+
 test("SW再起動後にもdownloadIdと完了状態を引き継ぐ", async () => {
   const mock = mockChrome();
   const first = new DownloadManager(mock.api);
