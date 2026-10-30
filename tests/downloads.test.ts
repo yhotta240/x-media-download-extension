@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DownloadManager } from "../src/background/downloads.ts";
 import type { MediaPost } from "../src/media/types.ts";
+import type { ArchiveService, ArchiveSnapshot } from "../src/archive/types.ts";
 
 const post: MediaPost = { username: "example", postId: "123",
   media: [{ kind: "photo", url: "https://pbs.twimg.com/media/a?format=jpg&name=orig", ext: "jpg" },
@@ -167,4 +168,88 @@ test("処理完了後は新しいジョブで再ダウンロードできる", as
   assert.notEqual(next.jobId, first.jobId);
   await manager.status("123");
   assert.equal(mock.requests.length, 4);
+});
+
+function mockArchive() {
+  let result: ArchiveSnapshot = { state: "building" };
+  const prepared: string[] = [];
+  const released: string[] = [];
+  const service: ArchiveService = {
+    async prepare(jobId) { prepared.push(jobId); return result; },
+    async release(jobId) { released.push(jobId); },
+  };
+  return { service, prepared, released, result(value: ArchiveSnapshot) { result = value; } };
+}
+
+test("ZIP生成中はキューを塞がず，設定変更・SW再起動後も元のジョブで1件だけ保存する", async () => {
+  const mock = mockChrome();
+  const archive = mockArchive();
+  mock.local.settings = { multipleMediaMode: "zip" };
+  const manager = new DownloadManager(mock.api, archive.service);
+  const first = await manager.accept(post, { tabId: 1 });
+  assert.equal((await manager.status("123"))?.state, "processing");
+  assert.equal(mock.requests.length, 0);
+  assert.equal((await manager.accept(post, { tabId: 2 })).jobId, first.jobId);
+  // ZIP生成中に設定を変更しても，進行中のジョブの保存方法は変えない．
+  mock.local.settings = { multipleMediaMode: "individual" };
+  const restarted = new DownloadManager(mock.api, archive.service);
+  await restarted.recover();
+  archive.result({ state: "ready", url: "blob:chrome-extension://test-extension/archive", failed: false });
+  await restarted.archiveChanged(first.jobId);
+  await restarted.archiveChanged(first.jobId);
+  assert.equal(mock.requests.length, 1);
+  assert.equal(mock.requests[0].filename, "example_123.zip");
+  assert.equal(await restarted.filenameFor({ id: 1, url: mock.requests[0].url as string,
+    byExtensionId: "test-extension" }), "example_123.zip");
+  assert.equal((await restarted.status("123"))?.state, "processing");
+  assert.equal(archive.released.length, 0);
+  mock.items.get(1)!.state = "complete";
+  await restarted.refresh(1);
+  assert.equal((await restarted.status("123"))?.state, "success");
+  assert.deepEqual(archive.released, [first.jobId]);
+  assert.ok(archive.prepared.every((id) => id === first.jobId));
+});
+
+test("ZIPの一部失敗・全件失敗・保存キャンセルはエラーとし，一時データを解放する", async () => {
+  for (const failure of ["partial", "all", "cancel"] as const) {
+    const mock = mockChrome();
+    const archive = mockArchive();
+    mock.local.settings = { multipleMediaMode: "zip" };
+    archive.result(failure === "all" ? { state: "error", error: "全件取得失敗" } : {
+      state: "ready", url: "blob:chrome-extension://test-extension/archive", failed: failure === "partial",
+    });
+    const manager = new DownloadManager(mock.api, archive.service);
+    const job = await manager.accept(post, { tabId: 1 });
+    await manager.status("123");
+    if (failure !== "all") {
+      mock.items.get(1)!.state = failure === "cancel" ? "interrupted" : "complete";
+      await manager.refresh(1);
+    }
+    assert.equal((await manager.status("123"))?.state, "error", failure);
+    assert.equal(mock.requests.length, failure === "all" ? 0 : 1, failure);
+    assert.deepEqual(archive.released, [job.jobId], failure);
+    if (failure === "partial") assert.equal(mock.items.get(1)!.state, "complete");
+  }
+});
+
+test("ZIP設定でも1件は直接保存し，完了直後のSW停止でもZIPの後片付けを復元する", async () => {
+  const mock = mockChrome();
+  const archive = mockArchive();
+  mock.local.settings = { multipleMediaMode: "zip" };
+  const manager = new DownloadManager(mock.api, archive.service);
+  await manager.accept({ ...post, media: [post.media[0]] }, { tabId: 1 });
+  await manager.status("123");
+  assert.equal(mock.requests[0].filename, "example_123_1.jpg");
+  assert.equal(archive.prepared.length, 0);
+  mock.items.get(1)!.state = "complete";
+  await manager.refresh(1);
+  const zipJob = await manager.accept(post, { tabId: 1 });
+  archive.result({ state: "ready", url: "blob:chrome-extension://test-extension/archive", failed: false });
+  await manager.status("123");
+  // completeの保存後，release前にSWが止まった状態を再現する．
+  const stored = mock.session["xmd:job:123"] as { state: string; entries: { state: string }[] };
+  stored.state = "success";
+  stored.entries[0].state = "complete";
+  await new DownloadManager(mock.api, archive.service).recover();
+  assert.deepEqual(archive.released, [zipJob.jobId]);
 });

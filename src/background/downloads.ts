@@ -1,6 +1,9 @@
+import type { ArchiveFile, ArchiveService } from "../archive/types.ts";
 import { LIMITS } from "../config.ts";
 import { mediaFilename } from "../media/parse.ts";
 import { DOWNLOAD_STATUS, type JobStatus, type MediaPost } from "../media/types.ts";
+import { normalizeSettings } from "../settings.ts";
+import { OffscreenArchive } from "./archive.ts";
 
 type Client = { tabId: number; documentId?: string };
 type DownloadEntry = {
@@ -17,6 +20,7 @@ type DownloadJob = {
   state: "processing" | "success" | "error";
   clients: Client[];
   entries: DownloadEntry[];
+  archive?: { files: ArchiveFile[]; failed: boolean };
 };
 const PREFIX = "xmd:job:";
 
@@ -36,11 +40,13 @@ function jobStatus(job: DownloadJob): JobStatus {
 /** ジョブとdownloadIdはsessionに保存し，SWの停止後も状態を復元する． */
 export class DownloadManager {
   private api: typeof chrome;
+  private archives: ArchiveService;
   // 実行中のイベントの排他制御のみ．ジョブの正本は常にstorage.sessionにある．
   private queue: Promise<unknown> = Promise.resolve();
 
-  constructor(api: typeof chrome) {
+  constructor(api: typeof chrome, archives: ArchiveService = new OffscreenArchive(api)) {
     this.api = api;
+    this.archives = archives;
   }
 
   private exclusive<T>(action: () => Promise<T>): Promise<T> {
@@ -102,7 +108,7 @@ export class DownloadManager {
 
   async accept(post: MediaPost, client: Client): Promise<JobStatus> {
     return this.exclusive(async () => {
-      const { enabled } = await this.api.storage.local.get("enabled");
+      const { enabled, settings } = await this.api.storage.local.get(["enabled", "settings"]);
       if (enabled === false) throw new Error("拡張機能が無効です");
       const current = await this.load(post.postId);
       if (current?.state === "processing") {
@@ -129,6 +135,20 @@ export class DownloadManager {
           ...(media.url ? {} : { error: media.error ?? "メディアを取得できませんでした" }),
         })),
       };
+      if (post.media.length > 1 && normalizeSettings(settings).multipleMediaMode === "zip") {
+        // 設定は開始時点で確定する．進行中のジョブに後の設定変更を反映しない．
+        job.archive = {
+          files: job.entries.map(({ url, filename }) => ({ url, filename })),
+          failed: false,
+        };
+        job.entries = [
+          {
+            url: null,
+            filename: `${post.username}_${post.postId}.zip`,
+            state: "queued",
+          },
+        ];
+      }
       await this.save(job);
       const finished = (await this.allJobs())
         .filter((entry) => entry.state !== "processing")
@@ -155,6 +175,22 @@ export class DownloadManager {
   }
 
   private async execute(job: DownloadJob): Promise<void> {
+    // 保存要求前はOffscreenの存在も確認する．生成後にSW・Documentが停止しても再開できる．
+    if (job.archive && job.entries[0].state === "queued") {
+      const entry = job.entries[0];
+      try {
+        const archive = await this.archives.prepare(job.jobId, job.archive.files);
+        // 生成はOffscreen側で継続し，このキューを状態確認や他の保存に明け渡す．
+        if (archive.state === "building") return;
+        if (archive.state === "error") throw new Error(archive.error);
+        entry.url = archive.url;
+        job.archive.failed = archive.failed;
+      } catch (error) {
+        entry.state = "interrupted";
+        entry.error = error instanceof Error ? error.message : "ZIPを生成できませんでした";
+      }
+      await this.save(job);
+    }
     for (const entry of job.entries) {
       if (entry.state === "starting" && entry.downloadId === undefined) {
         // download()の受理直後にSWが停止した場合は，既存要求を探す．再発行はしない．
@@ -208,8 +244,28 @@ export class DownloadManager {
       (entry) => entry.state === "complete" || entry.state === "interrupted",
     );
     if (settled)
-      job.state = job.entries.every((entry) => entry.state === "complete") ? "success" : "error";
+      job.state =
+        job.entries.every((entry) => entry.state === "complete") && !job.archive?.failed
+          ? "success"
+          : "error";
     await this.save(job);
+    if (settled) await this.releaseArchive(job);
+  }
+
+  private async releaseArchive(job: DownloadJob): Promise<void> {
+    if (!job.archive) return;
+    try {
+      await this.archives.release(job.jobId);
+    } catch (error) {
+      console.warn("ZIPの一時データを解放できませんでした", error);
+    }
+  }
+
+  async archiveChanged(jobId: string): Promise<void> {
+    await this.exclusive(async () => {
+      const job = (await this.allJobs()).find((job) => job.jobId === jobId);
+      if (job?.archive && job.state === "processing") await this.execute(job);
+    });
   }
 
   async status(postId: string): Promise<JobStatus | undefined> {
@@ -238,6 +294,7 @@ export class DownloadManager {
     await this.exclusive(async () => {
       for (const job of await this.allJobs()) {
         if (job.state === "processing") await this.execute(job);
+        else await this.releaseArchive(job);
       }
     });
   }

@@ -8,7 +8,8 @@
   "icons": {
     "128": "icons/icon.png"
   },
-  "permissions": ["storage", "downloads", "tabs"],
+  "permissions": ["storage", "downloads", "tabs", "offscreen"],
+  "host_permissions": ["https://pbs.twimg.com/*", "https://video.twimg.com/*"],
   "action": {
     "default_popup": "popup.html"
   },
