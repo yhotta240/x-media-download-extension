@@ -194,6 +194,7 @@ window.addEventListener("message", (event: MessageEvent) => {
     event.origin !== location.origin ||
     event.data?.channel !== BRIDGE_CHANNEL ||
     event.data?.type !== "posts" ||
+    !supportedPage() ||
     !Array.isArray(event.data.posts) ||
     event.data.posts.length > LIMITS.bridgePosts
   )

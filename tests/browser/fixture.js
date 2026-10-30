@@ -1,4 +1,6 @@
 const bridge = "x-media-download:v1";
+history.replaceState({}, "", "/i/chat");
+let ready = false;
 const listeners = [];
 const storageListeners = [];
 const calls = [];
@@ -40,7 +42,10 @@ document.getElementById("posts").innerHTML =
   article("115", `<p>独立した入れ子ポスト</p>${article("116", image("nested"))}`);
 
 window.addEventListener("message", (event) => {
-  if (event.data?.channel === bridge && event.data.type === "ready") publish();
+  if (event.data?.channel === bridge && event.data.type === "ready") {
+    ready = true;
+    publish();
+  }
 });
 function publish() { window.postMessage({ channel: bridge, type: "posts", posts: [...fixtures.values()] }, location.origin); }
 
@@ -77,7 +82,16 @@ async function until(check) {
 }
 
 async function run() {
+  await until(() => ready);
+  await wait();
+  assert(!document.querySelector(".xmd-button"), "DMで初期化してもボタンを表示しない");
+  // pushStateではpopstateは発火しない．SPAと同様にDOMと投稿情報を更新する．
+  history.pushState({}, "", "/home");
+  const posts = document.getElementById("posts");
+  posts.innerHTML = posts.innerHTML;
+  publish();
   await until(() => button("102") && button("107"));
+  assert(!!button("102"), "DMからホームへのSPA遷移で再読み込みせずボタンを表示");
   assert(!button("101"), "メディアなしのポストには表示しない");
   assert(!button("111"), "未表示のセンシティブメディアには表示しない");
   await until(() => button("116"));

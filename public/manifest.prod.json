@@ -21,15 +21,13 @@
       "matches": ["https://x.com/*"],
       "js": ["page.js"],
       "run_at": "document_start",
-      "world": "MAIN",
-      "exclude_matches": ["https://x.com/messages*", "https://x.com/i/chat*", "https://x.com/i/broadcasts*", "https://x.com/i/spaces*"]
+      "world": "MAIN"
     },
     {
       "matches": ["https://x.com/*"],
       "js": ["content.js"],
       "css": ["content.css"],
-      "run_at": "document_idle",
-      "exclude_matches": ["https://x.com/messages*", "https://x.com/i/chat*", "https://x.com/i/broadcasts*", "https://x.com/i/spaces*"]
+      "run_at": "document_idle"
     }
   ]
 }

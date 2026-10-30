@@ -1,7 +1,7 @@
 import { LIMITS } from "../config.ts";
 import { extractPosts } from "../media/parse.ts";
 import { BRIDGE_CHANNEL, type MediaPost } from "../media/types.ts";
-import { isXPostApiUrl as isPostResponse } from "../x/site.ts";
+import { isXPostApiUrl as isPostResponse, isSupportedXPage } from "../x/site.ts";
 
 // MAIN worldで実行する．認証情報や生のレスポンスを他のworldへ渡さない．
 // Content Scriptの準備が済むまでだけ保持する．以後のキャッシュは受信側に任せる．
@@ -18,6 +18,8 @@ function publish(posts: MediaPost[]): void {
 }
 
 function capture(data: unknown): void {
+  // JSONの読み取り中に対象外画面へ遷移した場合も，投稿情報を転送しない．
+  if (!isSupportedXPage(location.pathname)) return;
   const posts = extractPosts(data);
   if (ready) {
     publish(posts);
@@ -35,7 +37,8 @@ function capture(data: unknown): void {
 
 async function captureResponse(response: Response): Promise<void> {
   try {
-    if (response.ok && isPostResponse(response.url)) capture(await response.clone().json());
+    if (isSupportedXPage(location.pathname) && response.ok && isPostResponse(response.url))
+      capture(await response.clone().json());
   } catch {
     /* Xの表示には影響させない． */
   }
@@ -57,7 +60,13 @@ XMLHttpRequest.prototype.send = function (
     "load",
     () => {
       try {
-        if (this.status < 200 || this.status >= 300 || !isPostResponse(this.responseURL)) return;
+        if (
+          !isSupportedXPage(location.pathname) ||
+          this.status < 200 ||
+          this.status >= 300 ||
+          !isPostResponse(this.responseURL)
+        )
+          return;
         if (this.responseType === "json") capture(this.response);
         else if (!this.responseType || this.responseType === "text")
           capture(JSON.parse(this.responseText));

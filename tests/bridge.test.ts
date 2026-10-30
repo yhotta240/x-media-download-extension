@@ -10,7 +10,8 @@ const data = { csrf: "must-not-leave-page", data: { result: {
   } }, core: { user_results: { result: { legacy: { screen_name: "example" } } } },
 } } };
 
-function setup(url = "https://x.com/i/api/graphql/dmRandomHash/HomeTimeline", json: unknown = data) {
+function setup(url = "https://x.com/i/api/graphql/dmRandomHash/HomeTimeline", json: unknown = data,
+  pathname = "/home") {
   const messages: { channel: string; posts: { postId: string; media: unknown[] }[] }[] = [];
   const handlers = new Map<string, (event: unknown) => void>();
   let calls = 0;
@@ -39,13 +40,44 @@ function setup(url = "https://x.com/i/api/graphql/dmRandomHash/HomeTimeline", js
     send() { this.sends++; }
     load() { for (const handler of this.listeners.splice(0)) handler(); }
   }
-  runInNewContext(bundle, { window, location: { origin: "https://x.com" }, XMLHttpRequest: Xhr, URL });
+  const location = { origin: "https://x.com", pathname };
+  runInNewContext(bundle, { window, location, XMLHttpRequest: Xhr, URL });
   function ready(origin = "https://x.com", source: unknown = window) {
     handlers.get("message")?.({ origin, source, data: { channel: "x-media-download:v1", type: "ready" } });
   }
-  return { window, response, messages, ready, Xhr,
+  return { window, response, messages, ready, Xhr, location,
     calls: () => calls, failClone() { cloneFails = true; } };
 }
+
+test("DMからのSPA遷移に備え，両Manifestで両スクリプトをX全体へ注入する", () => {
+  for (const mode of ["dev", "prod"]) {
+    const manifest = JSON.parse(readFileSync(new URL(`../public/manifest.${mode}.json`, import.meta.url), "utf8"));
+    for (const file of ["page.js", "content.js"]) {
+      const entry = manifest.content_scripts.find((entry: { js: string[] }) => entry.js.includes(file));
+      assert.ok(entry?.matches.includes("https://x.com/*"), `${mode}: ${file}`);
+      assert.equal(entry.exclude_matches, undefined);
+    }
+  }
+});
+
+test("対象外画面では解析せず，SPAでホームへ移動するとfetch・XHRの解析を始める", async () => {
+  for (const pathname of ["/messages", "/i/chat", "/i/broadcasts/123", "/i/spaces/123"]) {
+    const app = setup(undefined, data, pathname);
+    app.ready();
+    await app.window.fetch("/request");
+    const xhr = new app.Xhr();
+    xhr.send(); xhr.load();
+    await new Promise(setImmediate);
+    assert.equal(app.messages.length, 0, pathname);
+    app.location.pathname = "/home";
+    await app.window.fetch("/request");
+    const homeXhr = new app.Xhr();
+    homeXhr.send(); homeXhr.load();
+    await new Promise(setImmediate);
+    assert.equal(app.messages.length, 2, pathname);
+    assert.ok(app.messages.every((message) => message.posts[0].postId === "123"));
+  }
+});
 
 test("MAIN取得処理は元のfetchレスポンスをそのまま返し，追加要求を発行しない", async () => {
   const app = setup();
