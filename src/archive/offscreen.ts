@@ -21,9 +21,9 @@ async function drain(): Promise<void> {
       if (!next || tasks.get(next.jobId) !== next.task) continue;
       const { jobId, files, task } = next;
       try {
-        const { blob, failed } = await buildZip(files, task.controller.signal);
+        const { blob, failed, errors } = await buildZip(files, task.controller.signal);
         if (tasks.get(jobId) !== task) continue;
-        task.snapshot = { state: "ready", url: URL.createObjectURL(blob), failed };
+        task.snapshot = { state: "ready", url: URL.createObjectURL(blob), failed, errors };
       } catch (error) {
         task.snapshot = {
           state: "error",

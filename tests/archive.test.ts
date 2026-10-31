@@ -44,6 +44,10 @@ test("取得途中で失敗したメディアをZIPへ混入させず，元の�
   }) as typeof fetch;
   const result = await buildZip([...files, { url: null, filename: "example_123_3.mp4" }], undefined, fetchMedia);
   assert.equal(result.failed, true);
+  assert.deepEqual(result.errors, [
+    "example_123_1.jpg: NETWORK_FAILED",
+    "example_123_3.mp4: 保存可能なメディアURLがありません",
+  ]);
   const extracted = unzipSync(new Uint8Array(await result.blob.arrayBuffer()));
   assert.deepEqual(Object.keys(extracted), ["example_123_2.mp4"]);
   assert.deepEqual(extracted["example_123_2.mp4"], new Uint8Array([9, 8]));

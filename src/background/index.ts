@@ -1,6 +1,7 @@
 import { ARCHIVE_CHANGED, ARCHIVE_PAGE } from "../archive/types.ts";
 import { asRecord, isPostId, validatePost } from "../media/parse.ts";
 import { type DownloadReply, GET_DOWNLOAD, START_DOWNLOAD } from "../media/types.ts";
+import { logError } from "../utils/logger.ts";
 import { isSupportedXUrl } from "../x/site.ts";
 import { DownloadManager } from "./downloads.ts";
 
@@ -67,6 +68,13 @@ chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) =>
         ok: false,
         error: error instanceof Error ? error.message : "ダウンロード処理に失敗しました",
       });
+      if (request.type === START_DOWNLOAD) {
+        try {
+          await logError("保存を開始できませんでした", "background", error);
+        } catch (logError) {
+          console.warn("エラーログを記録できませんでした", logError);
+        }
+      }
     }
   })();
   return true;

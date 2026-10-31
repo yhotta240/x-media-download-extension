@@ -71,7 +71,6 @@ export function setupThemeMenu(onChange: (theme: Theme) => void): void {
     const opt = (e.target as HTMLElement).closest(".theme-option") as HTMLButtonElement | null;
     if (!opt) return;
     const value = (opt.dataset.theme || "system") as Theme;
-    applyTheme(value);
     try {
       onChange(value);
     } catch (err) {
