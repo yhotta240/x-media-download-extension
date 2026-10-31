@@ -3,6 +3,7 @@ import { LIMITS } from "../config.ts";
 import { mediaFilename } from "../media/parse.ts";
 import { DOWNLOAD_STATUS, type JobStatus, type MediaPost } from "../media/types.ts";
 import { normalizeSettings } from "../settings.ts";
+import { logError } from "../utils/logger.ts";
 import { OffscreenArchive } from "./archive.ts";
 
 type Client = { tabId: number; documentId?: string };
@@ -20,7 +21,7 @@ type DownloadJob = {
   state: "processing" | "success" | "error";
   clients: Client[];
   entries: DownloadEntry[];
-  archive?: { files: ArchiveFile[]; failed: boolean };
+  archive?: { files: ArchiveFile[]; failed: boolean; errors?: string[] };
 };
 const PREFIX = "xmd:job:";
 
@@ -138,7 +139,7 @@ export class DownloadManager {
       if (post.media.length > 1 && normalizeSettings(settings).multipleMediaMode === "zip") {
         // 設定は開始時点で確定する．進行中のジョブに後の設定変更を反映しない．
         job.archive = {
-          files: job.entries.map(({ url, filename }) => ({ url, filename })),
+          files: job.entries.map(({ url, filename, error }) => ({ url, filename, error })),
           failed: false,
         };
         job.entries = [
@@ -185,6 +186,7 @@ export class DownloadManager {
         if (archive.state === "error") throw new Error(archive.error);
         entry.url = archive.url;
         job.archive.failed = archive.failed;
+        job.archive.errors = archive.errors;
       } catch (error) {
         entry.state = "interrupted";
         entry.error = error instanceof Error ? error.message : "ZIPを生成できませんでした";
@@ -249,7 +251,38 @@ export class DownloadManager {
           ? "success"
           : "error";
     await this.save(job);
+    if (job.state === "error") await this.reportError(job);
     if (settled) await this.releaseArchive(job);
+  }
+
+  private async reportError(job: DownloadJob): Promise<void> {
+    let succeeded = job.entries.filter((entry) => entry.state === "complete").length;
+    let failed = job.entries.length - succeeded;
+    const reasons = job.entries
+      .filter((entry) => entry.error)
+      .map((entry) => `${entry.filename}: ${entry.error}`);
+    let summary: string;
+    if (job.archive) {
+      const errors = job.archive.errors;
+      reasons.push(...(errors ?? []));
+      failed = succeeded ? (errors?.length ?? 0) : job.archive.files.length;
+      succeeded = succeeded ? job.archive.files.length - failed : 0;
+      // 更新前に生成済みのZIPには失敗件数がないため，推測しない．
+      summary =
+        job.archive.failed && !errors && succeeded
+          ? "ZIP保存済み，一部メディアの取得に失敗しました"
+          : `${succeeded}件成功，${failed}件失敗`;
+    } else summary = `${succeeded}件成功，${failed}件失敗`;
+    try {
+      await logError(
+        `保存に失敗しました（${summary}）`,
+        "background",
+        `ポストID: ${job.postId}\n${reasons.join("\n")}`,
+      );
+    } catch (error) {
+      // ログ保存の失敗で，保存結果の通知やZIPの解放を妨げない．
+      console.warn("保存エラーのログを記録できませんでした", error);
+    }
   }
 
   private async releaseArchive(job: DownloadJob): Promise<void> {

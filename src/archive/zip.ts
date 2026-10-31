@@ -7,7 +7,7 @@ export async function buildZip(
   files: ArchiveFile[],
   signal?: AbortSignal,
   fetchMedia: typeof fetch = fetch,
-): Promise<{ blob: Blob; failed: boolean }> {
+): Promise<{ blob: Blob; failed: boolean; errors: string[] }> {
   const chunks: BlobPart[] = [];
   let zipError: Error | null = null;
   let size = 0;
@@ -19,18 +19,20 @@ export async function buildZip(
     else if (!zipError) chunks.push(data as Uint8Array<ArrayBuffer>);
   });
   let count = 0;
-  let failed = false;
+  const errors: string[] = [];
   for (const file of files) {
     let bytes: Uint8Array;
     try {
       if (!file.url || (!imageMedia(file.url) && !isMp4Url(file.url)))
-        throw new Error("保存可能なメディアURLがありません");
+        throw new Error(file.error ?? "保存可能なメディアURLがありません");
       const response = await fetchMedia(file.url, { credentials: "include", signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       bytes = new Uint8Array(await response.arrayBuffer());
     } catch (error) {
       if (signal?.aborted) throw error;
-      failed = true;
+      errors.push(
+        `${file.filename}: ${error instanceof Error ? error.message : "取得に失敗しました"}`,
+      );
       continue;
     }
     // 取得中に失敗したファイルを途中までZIPへ入れないため，ここで初めて追加する．
@@ -40,8 +42,8 @@ export async function buildZip(
     if (zipError) throw zipError;
     count++;
   }
-  if (!count) throw new Error("保存できるメディアがありません");
+  if (!count) throw new Error(`保存できるメディアがありません\n${errors.join("\n")}`);
   zip.end();
   if (zipError) throw zipError;
-  return { blob: new Blob(chunks, { type: "application/zip" }), failed };
+  return { blob: new Blob(chunks, { type: "application/zip" }), failed: errors.length > 0, errors };
 }

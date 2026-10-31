@@ -16,7 +16,7 @@ import { PopupPanel } from "./components/panel";
 import { initShareMenu } from "./components/share";
 import { applyTheme, setupThemeMenu } from "./components/theme";
 import { setupVersionTab } from "./components/version";
-import type { ManifestMetadata, SharePlatform, Theme } from "./types";
+import type { ManifestMetadata, Theme } from "./types";
 
 export class PopupManager {
   private panel: PopupPanel;
@@ -73,9 +73,6 @@ export class PopupManager {
         this.enabledElement.checked = this.enabled;
         this.enabledElement.setAttribute("aria-checked", String(this.enabled));
       }
-      await this.showLog(
-        `${this.manifestData.short_name} は現在 ${this.enabled ? "有効" : "無効"} です`,
-      );
     } catch (err) {
       console.error("error", err);
       await this.showLog("設定の読み込みに失敗しました", "error", err);
@@ -108,11 +105,6 @@ export class PopupManager {
       this.enabledElement?.setAttribute("aria-checked", String(this.enabled));
       try {
         await setEnabled(this.enabled);
-        await this.showLog(
-          this.enabled
-            ? `${this.manifestData.short_name} は有効になりました`
-            : `${this.manifestData.short_name} は無効になりました`,
-        );
       } catch (err) {
         console.error("failed to save enabled state", err);
         await this.showLog("有効状態の保存に失敗しました", "error", err);
@@ -123,26 +115,14 @@ export class PopupManager {
     setupThemeMenu(async (value: Theme) => {
       try {
         applyTheme(value);
-        await this.showLog(`テーマを ${value} に変更しました`);
       } catch (e) {
         await this.showLog("テーマ設定の保存に失敗しました", "error", e);
       }
     });
 
     // シェアメニューの初期化
-    initShareMenu(async (platform: SharePlatform, success: boolean) => {
-      const platformNames: Record<SharePlatform, string> = {
-        twitter: "X (Twitter)",
-        facebook: "Facebook",
-        copy: "クリップボード",
-      };
-      if (success) {
-        if (platform === "copy") {
-          await this.showLog("URLをコピーしました");
-        } else {
-          await this.showLog(`${platformNames[platform]}でシェアしました`);
-        }
-      } else {
+    initShareMenu(async (_platform, success) => {
+      if (!success) {
         await this.showLog("シェアに失敗しました", "error");
       }
     });

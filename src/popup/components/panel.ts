@@ -267,6 +267,7 @@ export class PopupPanel {
 
     const body = document.createElement("span");
     body.className = "text-break flex-grow-1";
+    body.style.whiteSpace = "pre-line";
     body.textContent = message;
 
     if (level === "error" && issuesUrl) {
@@ -295,7 +296,13 @@ export class PopupPanel {
     for (const entry of entries) {
       if (entry.hidden) continue;
       fragment.appendChild(
-        this.createLogElement(entry.message, entry.timestamp, entry.level, entry.source, issuesUrl),
+        this.createLogElement(
+          entry.detail ? `${entry.message}\n${entry.detail}` : entry.message,
+          entry.timestamp,
+          entry.level,
+          entry.source,
+          issuesUrl,
+        ),
       );
     }
     this.messageDiv.appendChild(fragment);

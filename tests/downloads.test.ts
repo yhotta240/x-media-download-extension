@@ -3,6 +3,7 @@ import test from "node:test";
 import { DownloadManager } from "../src/background/downloads.ts";
 import type { MediaPost } from "../src/media/types.ts";
 import type { ArchiveService, ArchiveSnapshot } from "../src/archive/types.ts";
+import type { LogEntry } from "../src/utils/logger.ts";
 
 const post: MediaPost = { username: "example", postId: "123",
   media: [{ kind: "photo", url: "https://pbs.twimg.com/media/a?format=jpg&name=orig", ext: "jpg" },
@@ -22,7 +23,17 @@ function mockChrome() {
         async set(values: Record<string, unknown>) { Object.assign(session, structuredClone(values)); },
         async remove(keys: string[]) { for (const key of keys) delete session[key]; },
       },
-      local: { async get() { return structuredClone(local); } },
+      local: {
+        async get(_key?: unknown, callback?: (values: Record<string, unknown>) => void) {
+          const values = structuredClone(local);
+          callback?.(values);
+          return values;
+        },
+        set(values: Record<string, unknown>, callback: () => void) {
+          Object.assign(local, structuredClone(values));
+          callback();
+        },
+      },
     },
     tabs: { async sendMessage() {} },
     downloads: {
@@ -39,7 +50,10 @@ function mockChrome() {
       },
     },
   } as unknown as typeof chrome;
-  return { api, session, local, items, requests, failRequest(index: number) { failAt = index; } };
+  Object.defineProperty(globalThis, "chrome", { configurable: true, value: api });
+  return { api, session, local, items, requests,
+    logs() { return (local.app_logs ?? []) as LogEntry[]; },
+    failRequest(index: number) { failAt = index; } };
 }
 
 test("Chromeが要求を受理しただけでは成功にしない", async () => {
@@ -60,6 +74,7 @@ test("Chromeが要求を受理しただけでは成功にしない", async () =>
   mock.items.get(2)!.state = "complete";
   await manager.refresh(2);
   assert.equal((await manager.status("123"))?.state, "success");
+  assert.equal(mock.logs().length, 0);
 });
 
 test("同時クリック・別タブからの要求でも多重実行しない", async () => {
@@ -141,6 +156,12 @@ test("一部のキャンセルでも他のメディアを開始し，保存済�
   const status = await manager.status("123");
   assert.equal(status?.state, "error");
   assert.equal(mock.items.get(2)?.state, "complete");
+  assert.equal(mock.logs().length, 1);
+  assert.match(mock.logs()[0].message, /1件成功，1件失敗/);
+  assert.match(mock.logs()[0].detail!, /example_123_1.jpg: USER_CANCELED/);
+  await manager.refresh(2);
+  await new DownloadManager(mock.api).recover();
+  assert.equal(mock.logs().length, 1, "完了済みジョブの確認・復元で再記録しない");
 });
 
 test("ネットワーク中断と履歴消去を失敗と判定する", async () => {
@@ -217,6 +238,7 @@ test("ZIPの一部失敗・全件失敗・保存キャンセルはエラーと�
     mock.local.settings = { multipleMediaMode: "zip" };
     archive.result(failure === "all" ? { state: "error", error: "全件取得失敗" } : {
       state: "ready", url: "blob:chrome-extension://test-extension/archive", failed: failure === "partial",
+      errors: failure === "partial" ? ["example_123_1.jpg: HTTP 403"] : [],
     });
     const manager = new DownloadManager(mock.api, archive.service);
     const job = await manager.accept(post, { tabId: 1 });
@@ -228,6 +250,9 @@ test("ZIPの一部失敗・全件失敗・保存キャンセルはエラーと�
     assert.equal((await manager.status("123"))?.state, "error", failure);
     assert.equal(mock.requests.length, failure === "all" ? 0 : 1, failure);
     assert.deepEqual(archive.released, [job.jobId], failure);
+    assert.equal(mock.logs().length, 1);
+    assert.match(mock.logs()[0].message, failure === "partial" ? /1件成功，1件失敗/ : /0件成功，2件失敗/);
+    if (failure === "partial") assert.match(mock.logs()[0].detail!, /HTTP 403/);
     if (failure === "partial") assert.equal(mock.items.get(1)!.state, "complete");
   }
 });
